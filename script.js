@@ -232,7 +232,7 @@ const MESSAGES = [
     { text: "Trần Thị Thúy Hồng 💛",              color: "#ffe36e" },
     { text: "Chúc em Trung Thu vui vẻ và ấm áp 💚", color: "#8ef5a3" },
     { text: "Ngựa Hồng 🩷",             color: "#ff9ec7" },
-    { text: "Yêu em bé nhiều 💛",                  color: "#ffd0a1" }
+    { text: "Mong ăn chóng lớn 💛",                  color: "#ffd0a1" }
 ];
 
 function makeTextTexture(text, color){
@@ -241,7 +241,7 @@ function makeTextTexture(text, color){
     const ctx    = canvas.getContext('2d');
     const FS     = 110;
 
-    // đo chữ trước rồi mới set kích thước canvas
+    
     ctx.font = `bold ${FS}px Arial, "Segoe UI Emoji", "Noto Color Emoji"`;
     const w = Math.ceil(ctx.measureText(text).width) + FS * 1.6; // + khoảng hở
 
