@@ -127,9 +127,10 @@ scene.add(
 
 // 👉 Thay các đường dẫn dưới đây bằng ảnh của bạn
 const IMAGE_PATHS = [
-    './images/demo.png',
-    './images/demo2.png',
-    './images/demo3.png'
+    './images/hong_1.png',
+    './images/hong_2.png',
+    './images/hong_3.png',
+    './images/hong_4.png',
 ];
 
 const textureLoader = new THREE.TextureLoader();
