@@ -16,7 +16,46 @@
     Quà Trung Thu cho bé Ngựa Hồng 🥰
 </div> -->
 
+<!-- Nhạc nền -->
+<audio id="bgm" src="./music/Sau Này Em Cưới Ai Rồi (Lofi Meme).mp3" loop preload="auto"></audio>
+
+<!-- Nút bật/tắt nhạc -->
+<button id="musicBtn" title="Bật/tắt nhạc"
+    style="position:fixed; top:16px; right:16px; z-index:9999;
+           width:44px; height:44px; border:none; border-radius:50%;
+           background:rgba(255,255,255,0.2); color:#fff; font-size:20px;
+           cursor:pointer; backdrop-filter:blur(6px);">
+    🎵
+</button>
+
 <script src="script.js"></script>
+
+<script>
+    const bgm = document.getElementById('bgm');
+    const musicBtn = document.getElementById('musicBtn');
+    bgm.volume = 0.5; // 0 đến 1
+
+    function updateBtn() {
+        musicBtn.textContent = bgm.paused ? '🔇' : '🎵';
+    }
+
+    // Trình duyệt chặn autoplay, nên nhạc sẽ tự phát ở lần chạm/bấm đầu tiên
+    function startOnFirstInteraction() {
+        bgm.play().then(updateBtn).catch(() => {});
+    }
+    ['click', 'touchstart', 'keydown'].forEach(evt =>
+        document.addEventListener(evt, startOnFirstInteraction, { once: true })
+    );
+
+    // Nút bật/tắt
+    musicBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        bgm.paused ? bgm.play() : bgm.pause();
+        updateBtn();
+    });
+
+    updateBtn();
+</script>
 
 </body>
 </html>
