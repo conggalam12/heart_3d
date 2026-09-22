@@ -21,14 +21,8 @@ document.body.appendChild(renderer.domElement);
 camera.position.z = 180;
 
 // ======================
-// HEART FIREWORKS (trái tim pháo hoa)
+// HEART SHAPE (công thức hình trái tim)
 // ======================
-//
-// Cách hoạt động:
-//  1. Một quả pháo bay vút lên (có vệt lửa phía sau).
-//  2. Nổ ra thành hàng nghìn hạt sáng xếp thành hình trái tim,
-//     bung ra nhanh rồi chậm dần, lấp lánh, rơi nhẹ và mờ đi.
-//  3. Trái tim lớn ở giữa nổ đều đặn, các trái tim nhỏ nổ hai bên.
 
 function heart(t){
 
@@ -44,74 +38,101 @@ function heart(t){
     };
 }
 
-// ---------- CẤU HÌNH (chỉnh tùy ý) ----------
+// ======================
+// PINK HEART (trái tim động, màu hồng, đập theo nhịp tim)
+// ======================
+//
+// Cách hoạt động:
+//  1. Hàng nghìn hạt sáng được xếp cố định thành một khối hình trái tim
+//     (viền màu hồng đậm, ruột nhạt dần vào trong), dựng một lần duy nhất.
+//  2. Mỗi khung hình, cả khối chỉ phóng to/thu nhỏ nhẹ theo nhịp "thình - thịch"
+//     của tim thật (hai nhịp nhanh rồi nghỉ một chút, lặp lại liên tục).
+//  3. Từng hạt lấp lánh nhẹ (sáng/mờ xen kẽ) và cả khối xoay chầm chậm quanh trục dọc.
+//  4. Toàn bộ hiệu ứng đập + lấp lánh được tính trong shader (GPU), nên dù có
+//     hàng nghìn hạt, mỗi khung hình JS chỉ cần cập nhật vài giá trị (uniform).
 
-const MAX_PARTICLES   = 24000;   // tổng số hạt tối đa cùng lúc
-const MAIN_INTERVAL   = 4.8;     // giây giữa 2 lần nổ trái tim lớn
-const MINI_MIN        = 0.9;     // khoảng cách ngắn nhất giữa 2 trái tim nhỏ (giây)
-const MINI_MAX        = 2.0;     // khoảng cách dài nhất (giây)
-const MAIN_PARTICLES  = 7000;    // số hạt của trái tim lớn
-const LAUNCH_Y        = -170;    // độ cao pháo bắt đầu bay
+const HEART_PARTICLES  = 12000;
+const HEART_SCALE       = 6.4;     // độ lớn tổng thể của trái tim
+const HEART_THICKNESS   = 14;      // độ dày (theo trục Z) của khối trái tim
+const HEART_COLOR_EDGE  = "#ff2f78"; // hồng đậm ở viền
+const HEART_COLOR_CORE  = "#ffd9ea"; // hồng nhạt ở phần ruột
 
-// mỗi cặp: [màu viền ngoài, màu ruột bên trong]
-const FIREWORK_PALETTES = [
-    ["#ff4f93", "#ffd6e8"],   // hồng
-    ["#8a7dff", "#e0dbff"],   // tím (màu gốc của trái tim cũ)
-    ["#ff5468", "#ffe36e"],   // đỏ - vàng
-    ["#6ef2a6", "#eafff2"],   // xanh mint
-    ["#ffe36e", "#ff9ec7"]    // vàng - hồng
-];
+const hPosition   = new Float32Array(HEART_PARTICLES * 3);
+const hColor      = new Float32Array(HEART_PARTICLES * 3);
+const hSize       = new Float32Array(HEART_PARTICLES);
+const hPhase      = new Float32Array(HEART_PARTICLES);
+const hAlphaBase  = new Float32Array(HEART_PARTICLES);
 
-// ---------- BỘ NHỚ HẠT (dùng chung, không tạo mới liên tục) ----------
+{
+    const cEdge = new THREE.Color(HEART_COLOR_EDGE);
+    const cCore = new THREE.Color(HEART_COLOR_CORE);
 
-const pOrigin = new Float32Array(MAX_PARTICLES * 3);
-const pTarget = new Float32Array(MAX_PARTICLES * 3);
-const pBase   = new Float32Array(MAX_PARTICLES * 3);
-const pAge    = new Float32Array(MAX_PARTICLES).fill(1);
-const pLife   = new Float32Array(MAX_PARTICLES);       // 0 = hạt chưa dùng
-const pK      = new Float32Array(MAX_PARTICLES);
-const pGrav   = new Float32Array(MAX_PARTICLES);
-const pSize   = new Float32Array(MAX_PARTICLES);
-const pPhase  = new Float32Array(MAX_PARTICLES);
+    for(let i = 0; i < HEART_PARTICLES; i++){
 
-const aPos   = new Float32Array(MAX_PARTICLES * 3);
-const aCol   = new Float32Array(MAX_PARTICLES * 3);
-const aSize  = new Float32Array(MAX_PARTICLES);
-const aAlpha = new Float32Array(MAX_PARTICLES);
+        const t = Math.random() * Math.PI * 2;
+        const p = heart(t);
 
-const fwGeometry = new THREE.BufferGeometry();
+        // ~55% hạt nằm sát viền, số còn lại rải đều bên trong (căn bậc hai để
+        // mật độ đều, không dồn cục vào tâm)
+        const s = Math.random() < 0.55
+            ? 0.97 + Math.random() * 0.06
+            : Math.sqrt(Math.random());
 
-const posAttr   = new THREE.BufferAttribute(aPos, 3);
-const colAttr   = new THREE.BufferAttribute(aCol, 3);
-const sizeAttr  = new THREE.BufferAttribute(aSize, 1);
-const alphaAttr = new THREE.BufferAttribute(aAlpha, 1);
+        const i3 = i * 3;
 
-[posAttr, colAttr, sizeAttr, alphaAttr].forEach(a => a.setUsage(THREE.DynamicDrawUsage));
+        hPosition[i3]   = p.x * s * HEART_SCALE;
+        hPosition[i3+1] = (p.y + 2.5) * s * HEART_SCALE;
+        hPosition[i3+2] = (Math.random() - 0.5) * HEART_THICKNESS;
 
-fwGeometry.setAttribute('position', posAttr);
-fwGeometry.setAttribute('aColor',   colAttr);
-fwGeometry.setAttribute('aSize',    sizeAttr);
-fwGeometry.setAttribute('aAlpha',   alphaAttr);
+        // viền = màu đậm, càng vào trong càng chuyển sang màu nhạt
+        const m = 1 - s;
+        hColor[i3]   = cEdge.r + (cCore.r - cEdge.r) * m;
+        hColor[i3+1] = cEdge.g + (cCore.g - cEdge.g) * m;
+        hColor[i3+2] = cEdge.b + (cCore.b - cEdge.b) * m;
 
-const fwMaterial = new THREE.ShaderMaterial({
+        hSize[i]      = 0.9 + Math.random() * 0.7;
+        hPhase[i]     = Math.random() * Math.PI * 2;
+        hAlphaBase[i] = 0.75 + Math.random() * 0.25;
+    }
+}
+
+const heartGeometry = new THREE.BufferGeometry();
+heartGeometry.setAttribute('position',   new THREE.BufferAttribute(hPosition, 3));
+heartGeometry.setAttribute('aColor',     new THREE.BufferAttribute(hColor, 3));
+heartGeometry.setAttribute('aSize',      new THREE.BufferAttribute(hSize, 1));
+heartGeometry.setAttribute('aPhase',     new THREE.BufferAttribute(hPhase, 1));
+heartGeometry.setAttribute('aAlphaBase', new THREE.BufferAttribute(hAlphaBase, 1));
+
+const heartMaterial = new THREE.ShaderMaterial({
 
     uniforms: {
-        uScale: { value: window.innerHeight * 0.5 }
+        uScale: { value: window.innerHeight * 0.5 },
+        uTime:  { value: 0 },
+        uPulse: { value: 0 }
     },
 
     vertexShader: `
         attribute float aSize;
-        attribute float aAlpha;
+        attribute float aPhase;
+        attribute float aAlphaBase;
         attribute vec3  aColor;
         uniform   float uScale;
+        uniform   float uTime;
+        uniform   float uPulse;
         varying   float vAlpha;
         varying   vec3  vColor;
 
         void main(){
-            vAlpha = aAlpha;
+
+            // lấp lánh: mỗi hạt sáng/mờ lệch pha nhau
+            float sparkle = 0.85 + 0.15 * sin(uTime * 3.0 + aPhase);
+            vAlpha = aAlphaBase * sparkle;
             vColor = aColor;
+
             vec4 mv = modelViewMatrix * vec4(position, 1.0);
-            gl_PointSize = aSize * uScale / -mv.z;
+
+            // hạt hơi phồng to lên đúng lúc tim "đập"
+            gl_PointSize = aSize * (1.0 + uPulse * 0.3) * uScale / -mv.z;
             gl_Position  = projectionMatrix * mv;
         }
     `,
@@ -133,223 +154,36 @@ const fwMaterial = new THREE.ShaderMaterial({
     blending:    THREE.AdditiveBlending
 });
 
-const fireworks = new THREE.Points(fwGeometry, fwMaterial);
-fireworks.frustumCulled = false;   // vị trí hạt thay đổi liên tục
-scene.add(fireworks);
+const heartPoints = new THREE.Points(heartGeometry, heartMaterial);
+heartPoints.frustumCulled = false;
+heartPoints.position.set(0, 10, -30);
+scene.add(heartPoints);
 
-// ---------- PHÁT HẠT ----------
+// Nhịp tim: hai nhịp nhanh ("thình - thịch") rồi nghỉ, lặp lại liên tục.
+// Trả về giá trị từ 0 (nghỉ) đến ~1 (đỉnh nhịp đập).
+function heartbeat(t){
 
-let cursor = 0;
+    const period = 1.15; // giây cho mỗi chu kỳ đập
+    const x = (t % period) / period;
 
-function emit(ox, oy, oz, tx, ty, tz, r, g, b, life, k, grav, size){
-
-    const i  = cursor;
-    cursor   = (cursor + 1) % MAX_PARTICLES;   // hết chỗ thì ghi đè hạt cũ nhất
-    const i3 = i * 3;
-
-    pOrigin[i3] = ox;  pOrigin[i3+1] = oy;  pOrigin[i3+2] = oz;
-    pTarget[i3] = tx;  pTarget[i3+1] = ty;  pTarget[i3+2] = tz;
-    pBase[i3]   = r;   pBase[i3+1]   = g;   pBase[i3+2]   = b;
-
-    pAge[i]   = 0;
-    pLife[i]  = life;
-    pK[i]     = k;
-    pGrav[i]  = grav;
-    pSize[i]  = size;
-    pPhase[i] = Math.random() * Math.PI * 2;
-}
-
-const colorA = new THREE.Color();
-const colorB = new THREE.Color();
-
-// Nổ ra hình trái tim: mỗi hạt bay tới một điểm của trái tim (viền + ruột)
-function explodeHeart(x, y, z, scale, hexA, hexB, count){
-
-    colorA.set(hexA);
-    colorB.set(hexB);
-
-    // xoay nhẹ trái tim quanh trục Y cho mỗi lần nổ nhìn khác nhau
-    const rotY = (Math.random() - 0.5) * 0.9;
-    const cs   = Math.cos(rotY);
-    const sn   = Math.sin(rotY);
-
-    // tia chớp lúc nổ
-    emit(x, y, z, 0, 0, 0, 1, 1, 1, 0.35, 1, 0, scale * 5);
-
-    for(let i = 0; i < count; i++){
-
-        const p = heart(Math.random() * Math.PI * 2);
-
-        // ~55% hạt nằm ở viền, còn lại lấp đầy bên trong
-        const s = Math.random() < 0.55
-            ? 0.97 + Math.random() * 0.06
-            : Math.sqrt(Math.random());
-
-        const hx = p.x * s * scale;
-        const hy = (p.y + 2.5) * s * scale;              // +2.5 để tim cân giữa
-        const hz = (Math.random() - 0.5) * scale * 5;    // độ dày của trái tim
-
-        const tx =  hx * cs + hz * sn;
-        const tz = -hx * sn + hz * cs;
-
-        // viền = màu 1, càng vào trong càng chuyển sang màu 2
-        const m = 1 - s;
-        const r = colorA.r + (colorB.r - colorA.r) * m;
-        const g = colorA.g + (colorB.g - colorA.g) * m;
-        const b = colorA.b + (colorB.b - colorA.b) * m;
-
-        emit(
-            x, y, z,
-            tx, hy, tz,
-            r, g, b,
-            2.6 + Math.random() * 1.4,        // thời gian sống
-            3 + Math.random(),                // độ "phanh" khi bung
-            5 + Math.random() * 4,            // trọng lực (rơi nhẹ)
-            0.8 + scale * 0.2 + Math.random() * 0.5
-        );
-    }
-}
-
-// ---------- PHÁO BAY LÊN ----------
-
-const rockets = [];
-
-function launchRocket(x, z, y1, dur, onBurst){
-    rockets.push({ x, z, y0: LAUNCH_Y, y1, t: 0, dur, onBurst });
-}
-
-function updateRockets(dt){
-
-    for(let i = rockets.length - 1; i >= 0; i--){
-
-        const r = rockets[i];
-
-        r.t += dt / r.dur;
-
-        const k = Math.min(r.t, 1);
-        const e = 1 - (1 - k) * (1 - k);              // bay nhanh rồi chậm dần
-        const y = r.y0 + (r.y1 - r.y0) * e;
-        const x = r.x + Math.sin(r.t * 14) * 2;       // lắc nhẹ khi bay
-
-        // đầu pháo sáng
-        emit(x, y, r.z, 0, 0, 0, 1, 0.95, 0.8, 0.09, 1, 0, 3.2);
-
-        // vệt lửa phía sau
-        for(let j = 0; j < 3; j++){
-            emit(
-                x, y, r.z,
-                (Math.random() - 0.5) * 6,
-                -4 - Math.random() * 10,
-                (Math.random() - 0.5) * 6,
-                1, 0.75 + Math.random() * 0.2, 0.4,
-                0.5 + Math.random() * 0.4,
-                2, 25, 1.3
-            );
-        }
-
-        if(r.t >= 1){
-            r.onBurst();
-            rockets.splice(i, 1);
-        }
-    }
-}
-
-// ---------- LỊCH BẮN ----------
-
-function pickPalette(){
-    return FIREWORK_PALETTES[Math.floor(Math.random() * FIREWORK_PALETTES.length)];
-}
-
-function launchMain(){
-
-    const pal = pickPalette();
-    const x = 0, y = 10, z = -30;
-
-    launchRocket(x, z, y, 1.1, () =>
-        explodeHeart(x, y, z, 6.2, pal[0], pal[1], MAIN_PARTICLES)
-    );
-}
-
-let side = 1;
-
-function launchMini(){
-
-    side = -side;   // luân phiên trái / phải
-
-    const pal   = pickPalette();
-    const x     = side * (110 + Math.random() * 120);
-    const z     = -20 - Math.random() * 160;
-    const y     = -10 + Math.random() * 120;
-    const scale = 1.8 + Math.random() * 1.6;
-    const count = Math.floor(1400 + scale * 450);
-
-    launchRocket(x, z, y, 0.8 + Math.random() * 0.4, () =>
-        explodeHeart(x, y, z, scale, pal[0], pal[1], count)
-    );
-}
-
-let mainTimer = 0.3;   // trái tim lớn nổ gần như ngay khi mở trang
-let miniTimer = 1.6;
-
-function updateFireworks(dt){
-
-    mainTimer -= dt;
-    if(mainTimer <= 0){
-        launchMain();
-        mainTimer = MAIN_INTERVAL;
+    function pulse(center, width){
+        const d = (x - center) / width;
+        return Math.exp(-d * d);
     }
 
-    miniTimer -= dt;
-    if(miniTimer <= 0){
-        launchMini();
-        miniTimer = MINI_MIN + Math.random() * (MINI_MAX - MINI_MIN);
-    }
+    return pulse(0.06, 0.055) * 1.0 + pulse(0.24, 0.06) * 0.65;
+}
 
-    updateRockets(dt);
+function updateHeart(elapsed){
 
-    for(let i = 0; i < MAX_PARTICLES; i++){
+    const beat = heartbeat(elapsed);
 
-        if(pAge[i] >= pLife[i]){
-            aAlpha[i] = 0;
-            continue;
-        }
+    heartMaterial.uniforms.uTime.value  = elapsed;
+    heartMaterial.uniforms.uPulse.value = beat;
 
-        pAge[i] += dt;
-
-        const age  = pAge[i];
-        const life = pLife[i];
-
-        if(age >= life){
-            aAlpha[i] = 0;
-            continue;
-        }
-
-        const i3 = i * 3;
-        const e  = 1 - Math.exp(-pK[i] * age);          // bung nhanh, chậm dần
-        const g  = 0.5 * pGrav[i] * age * age;          // rơi xuống
-
-        aPos[i3]   = pOrigin[i3]   + pTarget[i3]   * e;
-        aPos[i3+1] = pOrigin[i3+1] + pTarget[i3+1] * e - g;
-        aPos[i3+2] = pOrigin[i3+2] + pTarget[i3+2] * e;
-
-        const u    = age / life;
-        const heat = Math.max(0, 1 - age / 0.4);        // lúc mới nổ: trắng nóng
-
-        aCol[i3]   = pBase[i3]   + (1 - pBase[i3])   * heat * 0.9;
-        aCol[i3+1] = pBase[i3+1] + (1 - pBase[i3+1]) * heat * 0.9;
-        aCol[i3+2] = pBase[i3+2] + (1 - pBase[i3+2]) * heat * 0.9;
-
-        let a = u < 0.55 ? 1 : (1 - u) / 0.45;          // mờ dần về cuối
-        a *= 0.72 + 0.28 * Math.sin(age * 24 + pPhase[i]);   // lấp lánh
-
-        aAlpha[i] = a * 0.9;
-        aSize[i]  = pSize[i] * (1 - 0.5 * u) * (1 + heat * 0.6);
-    }
-
-    posAttr.needsUpdate   = true;
-    colAttr.needsUpdate   = true;
-    sizeAttr.needsUpdate  = true;
-    alphaAttr.needsUpdate = true;
+    const scale = 1 + beat * 0.14;
+    heartPoints.scale.set(scale, scale, scale);
+    heartPoints.rotation.y += 0.0025;
 }
 
 // ======================
@@ -672,6 +506,7 @@ function updateFloatingTexts(){
 // ======================
 
 let time = 0;
+let elapsed = 0;
 let lastFrame = performance.now();
 
 function animate(){
@@ -685,14 +520,12 @@ function animate(){
     const now = performance.now();
     const dt  = Math.min(0.05, (now - lastFrame) / 1000);
     lastFrame = now;
-    updateFireworks(dt);
+    elapsed  += dt;
+
+    updateHeart(elapsed);
 
     camera.position.x =
         Math.sin(time) * 50;
-
-    camera.position.z =
-        180 +
-        Math.cos(time)*20;
 
     camera.position.z = 260 + Math.cos(time) * 20;
     camera.lookAt(0, -60, 0);
@@ -720,6 +553,6 @@ window.addEventListener(
             window.innerHeight
         );
 
-        fwMaterial.uniforms.uScale.value = window.innerHeight * 0.5;
+        heartMaterial.uniforms.uScale.value = window.innerHeight * 0.5;
     }
 );
